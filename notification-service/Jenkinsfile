@@ -1,0 +1,40 @@
+pipeline {
+    agent any
+
+    stages {
+        stage('Checkout Codebase') {
+            steps{
+                checkout scm: [
+                    $class: 'GitSCM',
+                    branches: [[name: '*/main']],
+                    userRemoteConfigs: [[
+                        url: "git@github.com:dipenkumarr/slacked.git",
+                        credentialsId: "github-ssh-key"
+                    ]]
+                ]
+            }
+        }
+        stage('Build') {
+            steps {
+                echo 'Building the project'
+            }
+        }
+        stage('Test') {
+            steps {
+                echo 'Running tests on the project changes'
+            }
+        }
+        stage('Deploy') {
+            steps {
+                echo 'Deploying the project'
+            }
+        }
+    }
+
+    post {
+        always {
+            echo 'Sending Slack notification'
+            sh "go run notification-service/slack-notification.go ${BUILD_URL} ${currentBuild.result} ${BUILD_NUMBER} ${JOB_NAME} "
+        }
+    }
+}
