@@ -2,23 +2,18 @@ package main
 
 import (
 	"fmt"
-	"log"
 	"os"
 
-	"github.com/joho/godotenv"
 	"github.com/slack-go/slack"
 )
 
 func main() {
-	err := godotenv.Load("../.env")
-	if err != nil {
-		log.Fatal("Error loading .env file")
-	}
 
 	args := os.Args[1:]
 	fmt.Println(args)
 
 	api := slack.New(os.Getenv("SLACK_BOT_TOKEN"))
+
 	preText := "*Hello! Your Jenkins build has completed!*"
 	jenkinsURL := "*Build URL:* " + args[0]
 	buildResult := "*" + args[1] + "*"
@@ -41,7 +36,7 @@ func main() {
 
 	msg := slack.MsgOptionBlocks(preTextSection, dividerSection1, jenkinsBuildDetailsSection)
 
-	_, _, _, err = api.SendMessage(
+	_, _, _, err := api.SendMessage(
 		"C09650BR7SR",
 		msg,
 	)
