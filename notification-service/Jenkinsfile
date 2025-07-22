@@ -1,6 +1,10 @@
 pipeline {
     agent any
 
+    environment {
+        SLACK_BOT_TOKEN = credentials('SLACK_BOT_TOKEN')
+    }
+
     tools {
         go 'Go-1.24.1'
     }
@@ -36,9 +40,6 @@ pipeline {
     }
 
     post {
-        environment {
-            SLACK_BOT_TOKEN = credentials('SLACK_BOT_TOKEN') 
-        }
         always {
             echo 'Sending Slack notification'
             sh "go run notification-service/slack-notification.go ${BUILD_URL} ${currentBuild.result} ${BUILD_NUMBER} ${JOB_NAME} "
