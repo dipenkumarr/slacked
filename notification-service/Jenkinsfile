@@ -42,7 +42,7 @@ pipeline {
     post {
         always {
             echo 'Sending Slack notification'
-            sh "go run notification-service/slack-notification.go ${BUILD_URL} ${currentBuild.result} ${BUILD_NUMBER} ${JOB_NAME} "
+            sh "curl --header 'Content-Type: application/json' --request POST --data '{\"buildUrl\":\"${env.BUILD_URL}\", \"buildResult\":\"${currentBuild.result}\", \"buildNumber\":${env.BUILD_NUMBER}, \"jobName\":\"${env.JOB_NAME}\"}' http://192.168.1.89:8000/sendSlackMessage"
         }
     }
 }
