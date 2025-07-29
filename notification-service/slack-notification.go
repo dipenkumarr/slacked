@@ -53,7 +53,7 @@ func sendSlackMessage(w http.ResponseWriter, r *http.Request) {
 	msg := slack.MsgOptionBlocks(preTextSection, dividerSection1, jenkinsBuildDetailsSection)
 
 	_, _, _, err = api.SendMessage(
-		os.Getenv("SLACK_CHANNEL_ID"),
+		"C09650BR7SR",
 		msg,
 	)
 	if err != nil {
