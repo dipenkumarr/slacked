@@ -3,6 +3,7 @@ pipeline {
 
     environment {
         SLACK_BOT_TOKEN = credentials('SLACK_BOT_TOKEN')
+        SLACK_CHANNEL_ID = credentials('SLACK_CHANNEL_ID')
     }
 
     tools {
