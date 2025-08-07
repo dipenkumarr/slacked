@@ -101,7 +101,7 @@ func HandleRequest(ctx context.Context, request events.APIGatewayProxyRequest) (
 
 	// 5. Send the message
 	_, _, _, err = api.SendMessage(
-		fmt.Sprint(credentials.SlackChannelID),
+		credentials.SlackChannelID,
 		msg,
 	)
 	if err != nil {
