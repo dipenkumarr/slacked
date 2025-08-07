@@ -54,7 +54,7 @@ func HandleRequest(ctx context.Context, request events.APIGatewayProxyRequest) (
 		fmt.Printf("failed to get secret: %v\n", err)
 		return events.APIGatewayProxyResponse{Body: "Internal Server Error", StatusCode: 500}, err
 	}
-	fmt.Printf("successfully retrieved raw secret JSON: %s\n", secretJSON)
+	fmt.Println("successfully retrieved secret from Secrets Manager")
 
 	var credentials SlackCredentials
 
