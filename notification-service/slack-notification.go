@@ -4,9 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"net/http"
 	"os"
 
+	"github.com/aws/aws-lambda-go/events"
+	"github.com/aws/aws-lambda-go/lambda"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/secretsmanager"
 	"github.com/slack-go/slack"
@@ -44,20 +45,38 @@ func getSecret(ctx context.Context, secretName string) (string, error) {
 	return *result.SecretString, nil
 }
 
-func sendSlackMessage(w http.ResponseWriter, r *http.Request) {
+func HandleRequest(ctx context.Context, request events.APIGatewayProxyRequest) (events.APIGatewayProxyResponse, error) {
 
-	fmt.Fprintf(w, "<h1>Sent Slack Message!</h1>")
-
-	build := JenkinsBuild{}
-
-	err := json.NewDecoder(r.Body).Decode(&build)
+	// 1. Get the secrets from Secrets Manager.
+	secretName := os.Getenv("SECRET_NAME")
+	secretJSON, err := getSecret(ctx, secretName)
 	if err != nil {
-		http.Error(w, "Failed to decode JSON", http.StatusBadRequest)
-		return
+		fmt.Printf("failed to get secret: %v\n", err)
+		return events.APIGatewayProxyResponse{Body: "Internal Server Error", StatusCode: 500}, err
+	}
+	fmt.Println("successfully retrieved secret from Secrets Manager")
+
+	var credentials SlackCredentials
+
+	err = json.Unmarshal([]byte(secretJSON), &credentials)
+	if err != nil {
+		fmt.Printf("failed to unmarshal secret JSON: %v\n", err)
+		return events.APIGatewayProxyResponse{Body: "Internal Server Error", StatusCode: 500}, err
 	}
 
-	api := slack.New(os.Getenv("SLACK_BOT_TOKEN"))
+	// 2. Decode the JSON payload from the request body
+	build := JenkinsBuild{}
 
+	err = json.Unmarshal([]byte(request.Body), &build)
+	if err != nil {
+		fmt.Printf("could not unmarshal request body: %s\n", err)
+		return events.APIGatewayProxyResponse{Body: "Bad Request", StatusCode: 400}, err
+	}
+
+	// 3. Create a Slack client using the credentials
+	api := slack.New(credentials.SlackBotToken)
+
+	// 4. Prepare the message to be sent to Slack
 	preText := "*Hello! Your Jenkins build has completed!*"
 	jenkinsURL := "*Build URL:* " + build.BuildURL
 	buildResult := "*" + build.BuildResult + "*"
@@ -80,32 +99,21 @@ func sendSlackMessage(w http.ResponseWriter, r *http.Request) {
 
 	msg := slack.MsgOptionBlocks(preTextSection, dividerSection1, jenkinsBuildDetailsSection)
 
+	// 5. Send the message
 	_, _, _, err = api.SendMessage(
-		fmt.Sprint(os.Getenv("SLACK_CHANNEL_ID")),
+		credentials.SlackChannelID,
 		msg,
 	)
 	if err != nil {
-		fmt.Printf("failed posting message: %v\n", err)
-		return
+		fmt.Printf("Error sending message: %s\n", err)
+		return events.APIGatewayProxyResponse{Body: "Error sending Slack message", StatusCode: 500}, err
 	}
-	fmt.Printf("Message successfully sent to channel\n")
+
+	// 6. Return a success response to API Gateway
+	return events.APIGatewayProxyResponse{Body: "Message sent successfully!", StatusCode: 200}, nil
 
 }
 
 func main() {
-	// 1. Get the secrets from Secrets Manager.
-	secretJSON, err := getSecret(context.Background(), "slacked/slack-credentials")
-	if err != nil {
-		fmt.Printf("failed to get secret: %v\n", err)
-		return
-	}
-	fmt.Printf("Successfully retrieved raw secret JSON: %s\n", secretJSON)
-
-	var credentials SlackCredentials
-
-	err = json.Unmarshal([]byte(secretJSON), &credentials)
-	if err != nil {
-		fmt.Printf("failed to unmarshal secret JSON: %v\n", err)
-		return
-	}
+	lambda.Start(HandleRequest)
 }
