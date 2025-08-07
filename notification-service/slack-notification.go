@@ -49,7 +49,7 @@ func HandleRequest(ctx context.Context, request events.APIGatewayProxyRequest) (
 
 	// 1. Get the secrets from Secrets Manager.
 	secretName := os.Getenv("SECRET_NAME")
-	secretJSON, err := getSecret(context.Background(), secretName)
+	secretJSON, err := getSecret(ctx, secretName)
 	if err != nil {
 		fmt.Printf("failed to get secret: %v\n", err)
 		return events.APIGatewayProxyResponse{Body: "Internal Server Error", StatusCode: 500}, err
