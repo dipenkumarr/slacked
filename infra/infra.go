@@ -2,6 +2,10 @@ package main
 
 import (
 	"github.com/aws/aws-cdk-go/awscdk/v2"
+	"github.com/aws/aws-cdk-go/awscdk/v2/awsapigateway"
+	"github.com/aws/aws-cdk-go/awscdk/v2/awssecretsmanager"
+	"github.com/aws/aws-cdk-go/awscdklambdagoalpha/v2"
+
 	// "github.com/aws/aws-cdk-go/awscdk/v2/awssqs"
 	"github.com/aws/constructs-go/constructs/v10"
 	"github.com/aws/jsii-runtime-go"
@@ -18,12 +22,41 @@ func NewInfraStack(scope constructs.Construct, id string, props *InfraStackProps
 	}
 	stack := awscdk.NewStack(scope, &id, &sprops)
 
-	// The code that defines your stack goes here
+	// Get the Slack credentials secret reference
+	slackSecret := awssecretsmanager.Secret_FromSecretNameV2(stack, jsii.String("SlackCredentialsSecret"), jsii.String("slacked/slack-credentials"))
 
-	// example resource
-	// queue := awssqs.NewQueue(stack, jsii.String("InfraQueue"), &awssqs.QueueProps{
-	// 	VisibilityTimeout: awscdk.Duration_Seconds(jsii.Number(300)),
-	// })
+	// Create the notification Lambda function
+	notificationLambda := awscdklambdagoalpha.NewGoFunction(stack, jsii.String("NotificationLambda"), &awscdklambdagoalpha.GoFunctionProps{
+		FunctionName: jsii.String("slacked-notification-handler"),
+		Entry:        jsii.String("../notification-service"),
+		Environment: &map[string]*string{
+			"SECRET_NAME": slackSecret.SecretName(),
+		},
+	})
+
+	// Grant the Lambda function permissions to read the Slack credentials secret
+	slackSecret.GrantRead(notificationLambda, nil)
+
+	// Create the API Gateway
+	api := awsapigateway.NewRestApi(stack, jsii.String("SlackEndpointAPI"), &awsapigateway.RestApiProps{
+		RestApiName: jsii.String("Slack Notification Service"),
+		Description: jsii.String("Receives notifications from Jenkins"),
+	})
+
+	// Create the resource for the send-message endpoint
+	resource := api.Root().AddResource(jsii.String("send-message"), nil)
+
+	// Create the Lambda integration for the send-message endpoint
+	lambdaIntegration := awsapigateway.NewLambdaIntegration(notificationLambda, nil)
+
+	// Add the POST method to the resource
+	resource.AddMethod(jsii.String("POST"), lambdaIntegration, nil)
+
+	// Output the API URL
+	awscdk.NewCfnOutput(stack, jsii.String("APIUrl"), &awscdk.CfnOutputProps{
+		Value:       api.UrlForPath(resource.Path()),
+		Description: jsii.String("The URL for the API Gateway endpoint to be used in Jenkins"),
+	})
 
 	return stack
 }
