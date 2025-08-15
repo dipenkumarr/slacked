@@ -4,9 +4,11 @@ import (
 	"github.com/aws/aws-cdk-go/awscdk/v2"
 	"github.com/aws/aws-cdk-go/awscdk/v2/awsapigateway"
 	"github.com/aws/aws-cdk-go/awscdk/v2/awssecretsmanager"
+	"github.com/aws/aws-cdk-go/awscdk/v2/awssqs"
 	"github.com/aws/aws-cdk-go/awscdklambdagoalpha/v2"
 
-	// "github.com/aws/aws-cdk-go/awscdk/v2/awssqs"
+	"github.com/aws/aws-cdk-go/awscdk/v2/awslambdaeventsources"
+
 	"github.com/aws/constructs-go/constructs/v10"
 	"github.com/aws/jsii-runtime-go"
 )
@@ -22,6 +24,22 @@ func NewInfraStack(scope constructs.Construct, id string, props *InfraStackProps
 	}
 	stack := awscdk.NewStack(scope, &id, &sprops)
 
+	// Dead-Letter Queue
+	deadLetterQueue := awssqs.NewQueue(stack, jsii.String("SlackedDeadLetterQueue"), &awssqs.QueueProps{
+		QueueName:       jsii.String("slacked-dead-letter-queue"),
+		RetentionPeriod: awscdk.Duration_Days(jsii.Number(14)),
+	})
+
+	// Main Queue for messages
+	mainQueue := awssqs.NewQueue(stack, jsii.String("SlackedMainQueue"), &awssqs.QueueProps{
+		QueueName: jsii.String("slacked-main-queue"),
+		DeadLetterQueue: &awssqs.DeadLetterQueue{
+			MaxReceiveCount: jsii.Number(3),
+			Queue:           deadLetterQueue,
+		},
+		VisibilityTimeout: awscdk.Duration_Seconds(jsii.Number(30)),
+	})
+
 	// Get the Slack credentials secret reference
 	slackSecret := awssecretsmanager.Secret_FromSecretNameV2(stack, jsii.String("SlackCredentialsSecret"), jsii.String("slacked/slack-credentials"))
 
@@ -29,6 +47,7 @@ func NewInfraStack(scope constructs.Construct, id string, props *InfraStackProps
 	notificationLambda := awscdklambdagoalpha.NewGoFunction(stack, jsii.String("NotificationLambda"), &awscdklambdagoalpha.GoFunctionProps{
 		FunctionName: jsii.String("slacked-notification-handler"),
 		Entry:        jsii.String("../notification-service"),
+		Timeout:      awscdk.Duration_Seconds(jsii.Number(25)),
 		Environment: &map[string]*string{
 			"SECRET_NAME": slackSecret.SecretName(),
 		},
@@ -36,6 +55,10 @@ func NewInfraStack(scope constructs.Construct, id string, props *InfraStackProps
 
 	// Grant the Lambda function permissions to read the Slack credentials secret
 	slackSecret.GrantRead(notificationLambda, nil)
+
+	// Connect Lambda to Main SQS
+	sqsEventSource := awslambdaeventsources.NewSqsEventSource(mainQueue, nil)
+	notificationLambda.AddEventSource(sqsEventSource)
 
 	// Create the API Gateway
 	api := awsapigateway.NewRestApi(stack, jsii.String("SlackEndpointAPI"), &awsapigateway.RestApiProps{
