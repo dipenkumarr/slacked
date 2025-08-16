@@ -3,6 +3,7 @@ package main
 import (
 	"github.com/aws/aws-cdk-go/awscdk/v2"
 	"github.com/aws/aws-cdk-go/awscdk/v2/awsapigateway"
+	"github.com/aws/aws-cdk-go/awscdk/v2/awsiam"
 	"github.com/aws/aws-cdk-go/awscdk/v2/awssecretsmanager"
 	"github.com/aws/aws-cdk-go/awscdk/v2/awssqs"
 	"github.com/aws/aws-cdk-go/awscdklambdagoalpha/v2"
@@ -60,20 +61,56 @@ func NewInfraStack(scope constructs.Construct, id string, props *InfraStackProps
 	sqsEventSource := awslambdaeventsources.NewSqsEventSource(mainQueue, nil)
 	notificationLambda.AddEventSource(sqsEventSource)
 
-	// Create the API Gateway
+	// Create the API Gateway with SQS integration
 	api := awsapigateway.NewRestApi(stack, jsii.String("SlackEndpointAPI"), &awsapigateway.RestApiProps{
 		RestApiName: jsii.String("Slack Notification Service"),
-		Description: jsii.String("Receives notifications from Jenkins"),
+		Description: jsii.String("Receives notifications from Jenkins and puts them onto the SQS queue"),
+	})
+
+	// IAM role to grant the API Gateway permission to send messages to the SQS queue
+	apiGatewayRole := awsiam.NewRole(stack, jsii.String("ApiGatewaySqsRole"), &awsiam.RoleProps{
+		AssumedBy: awsiam.NewServicePrincipal(jsii.String("apigateway.amazonaws.com"), nil),
+	})
+	mainQueue.GrantSendMessages(apiGatewayRole)
+
+	// SQS Integration to API Gateway
+	sqsIntegration := awsapigateway.NewAwsIntegration(&awsapigateway.AwsIntegrationProps{
+		Service:               jsii.String("sqs"),
+		Path:                  mainQueue.QueueName(),
+		IntegrationHttpMethod: jsii.String("POST"),
+		Options: &awsapigateway.IntegrationOptions{
+			CredentialsRole: apiGatewayRole,
+			// Maps incoming req to SQS message API call
+			RequestParameters: &map[string]*string{
+				"integration.request.header.Content-Type": jsii.String("'application/x-www-form-urlencoded'"),
+			},
+			// Takes the body of the POST request from jenkins and makes it the body of the SQS message
+			RequestTemplates: &map[string]*string{
+				"application/json": jsii.String("Action=SendMessage&MessageBody=$util.urlEncoded($input.body)"),
+			},
+			IntegrationResponses: &[]*awsapigateway.IntegrationResponse{
+				{
+					StatusCode: jsii.String("200"),
+					ResponseTemplates: &map[string]*string{
+						"application/json": jsii.String("{\"status\": \"message queued to SQS\"}"),
+					},
+				},
+			},
+		},
 	})
 
 	// Create the resource for the send-message endpoint
 	resource := api.Root().AddResource(jsii.String("send-message"), nil)
 
-	// Create the Lambda integration for the send-message endpoint
-	lambdaIntegration := awsapigateway.NewLambdaIntegration(notificationLambda, nil)
-
 	// Add the POST method to the resource
-	resource.AddMethod(jsii.String("POST"), lambdaIntegration, nil)
+	resource.AddMethod(jsii.String("POST"), sqsIntegration, &awsapigateway.MethodOptions{
+		// Response to Jenkins client
+		MethodResponses: &[]*awsapigateway.MethodResponse{
+			{
+				StatusCode: jsii.String("200"),
+			},
+		},
+	})
 
 	// Output the API URL
 	awscdk.NewCfnOutput(stack, jsii.String("APIUrl"), &awscdk.CfnOutputProps{
