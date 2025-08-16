@@ -86,7 +86,7 @@ func NewInfraStack(scope constructs.Construct, id string, props *InfraStackProps
 			},
 			// Takes the body of the POST request from jenkins and makes it the body of the SQS message
 			RequestTemplates: &map[string]*string{
-				"application/json": jsii.String("Action=SendMessage&MessageBody=$util.urlEncoded($input.body)"),
+				"application/json": jsii.String("Action=SendMessage&MessageBody=$util.urlEncode($input.body)"),
 			},
 			IntegrationResponses: &[]*awsapigateway.IntegrationResponse{
 				{
