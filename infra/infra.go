@@ -24,6 +24,8 @@ func NewInfraStack(scope constructs.Construct, id string, props *InfraStackProps
 		sprops = props.StackProps
 	}
 	stack := awscdk.NewStack(scope, &id, &sprops)
+	awsAccountId := awscdk.Stack_Of(stack).Account()
+	const SqsSendMessageRequestTemplate = "Action=SendMessage&MessageBody=$util.urlEncode($input.body)"
 
 	// Dead-Letter Queue
 	deadLetterQueue := awssqs.NewQueue(stack, jsii.String("SlackedDeadLetterQueue"), &awssqs.QueueProps{
@@ -38,7 +40,7 @@ func NewInfraStack(scope constructs.Construct, id string, props *InfraStackProps
 			MaxReceiveCount: jsii.Number(3),
 			Queue:           deadLetterQueue,
 		},
-		VisibilityTimeout: awscdk.Duration_Seconds(jsii.Number(30)),
+		VisibilityTimeout: awscdk.Duration_Seconds(jsii.Number(150)),
 	})
 
 	// Get the Slack credentials secret reference
@@ -76,7 +78,7 @@ func NewInfraStack(scope constructs.Construct, id string, props *InfraStackProps
 	// SQS Integration to API Gateway
 	sqsIntegration := awsapigateway.NewAwsIntegration(&awsapigateway.AwsIntegrationProps{
 		Service:               jsii.String("sqs"),
-		Path:                  mainQueue.QueueName(),
+		Path:                  jsii.Sprintf("%s/%s", awsAccountId, mainQueue.QueueName()),
 		IntegrationHttpMethod: jsii.String("POST"),
 		Options: &awsapigateway.IntegrationOptions{
 			CredentialsRole: apiGatewayRole,
@@ -86,7 +88,7 @@ func NewInfraStack(scope constructs.Construct, id string, props *InfraStackProps
 			},
 			// Takes the body of the POST request from jenkins and makes it the body of the SQS message
 			RequestTemplates: &map[string]*string{
-				"application/json": jsii.String("Action=SendMessage&MessageBody=$util.urlEncode($input.body)"),
+				"application/json": jsii.String(SqsSendMessageRequestTemplate),
 			},
 			IntegrationResponses: &[]*awsapigateway.IntegrationResponse{
 				{
