@@ -28,6 +28,7 @@ func NewInfraStack(scope constructs.Construct, id string, props *InfraStackProps
 	}
 	stack := awscdk.NewStack(scope, &id, &sprops)
 	awsAccountId := awscdk.Stack_Of(stack).Account()
+	awsRegion := awscdk.Stack_Of(stack).Region()
 
 	// Dead-Letter Queue
 	deadLetterQueue := awssqs.NewQueue(stack, jsii.String("SlackedDeadLetterQueue"), &awssqs.QueueProps{
@@ -95,8 +96,8 @@ func NewInfraStack(scope constructs.Construct, id string, props *InfraStackProps
 
 	// SQS Integration to API Gateway
 	sqsIntegration := awsapigateway.NewAwsIntegration(&awsapigateway.AwsIntegrationProps{
-		Service:               jsii.String("sqs"),
-		Path:                  jsii.Sprintf("%s/%s", awsAccountId, mainQueue.QueueName()),
+		Service: jsii.String("sqs"),
+		Path:    jsii.Sprintf("%s/%s", *awsAccountId, *mainQueue.QueueName()), Region: awsRegion,
 		IntegrationHttpMethod: jsii.String("POST"),
 		Options: &awsapigateway.IntegrationOptions{
 			CredentialsRole: apiGatewayRole,
