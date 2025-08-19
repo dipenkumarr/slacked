@@ -6,6 +6,7 @@ import (
 	"github.com/aws/aws-cdk-go/awscdk/v2"
 	"github.com/aws/aws-cdk-go/awscdk/v2/awsapigateway"
 	"github.com/aws/aws-cdk-go/awscdk/v2/awsiam"
+	"github.com/aws/aws-cdk-go/awscdk/v2/awslogs"
 	"github.com/aws/aws-cdk-go/awscdk/v2/awssecretsmanager"
 	"github.com/aws/aws-cdk-go/awscdk/v2/awssqs"
 	"github.com/aws/aws-cdk-go/awscdklambdagoalpha/v2"
@@ -27,7 +28,6 @@ func NewInfraStack(scope constructs.Construct, id string, props *InfraStackProps
 	}
 	stack := awscdk.NewStack(scope, &id, &sprops)
 	awsAccountId := awscdk.Stack_Of(stack).Account()
-	const SqsSendMessageRequestTemplate = "Action=SendMessage&MessageBody=$util.urlEncode($input.body)"
 
 	// Dead-Letter Queue
 	deadLetterQueue := awssqs.NewQueue(stack, jsii.String("SlackedDeadLetterQueue"), &awssqs.QueueProps{
@@ -65,10 +65,26 @@ func NewInfraStack(scope constructs.Construct, id string, props *InfraStackProps
 	sqsEventSource := awslambdaeventsources.NewSqsEventSource(mainQueue, nil)
 	notificationLambda.AddEventSource(sqsEventSource)
 
+	// Create a Log Group for API Gateway
+	apiLogGroup := awslogs.NewLogGroup(stack, jsii.String("ApiGatewayLogGroup"), &awslogs.LogGroupProps{
+		LogGroupName:  jsii.String("/aws/apigateway/slacked-api"),
+		Retention:     awslogs.RetentionDays_ONE_WEEK,
+		RemovalPolicy: awscdk.RemovalPolicy_DESTROY,
+	})
+
 	// Create the API Gateway with SQS integration
 	api := awsapigateway.NewRestApi(stack, jsii.String("SlackEndpointAPI"), &awsapigateway.RestApiProps{
 		RestApiName: jsii.String("Slack Notification Service"),
 		Description: jsii.String("Receives notifications from Jenkins and puts them onto the SQS queue"),
+
+		DeployOptions: &awsapigateway.StageOptions{
+			LoggingLevel:         awsapigateway.MethodLoggingLevel_INFO,
+			DataTraceEnabled:     jsii.Bool(true),
+			MetricsEnabled:       jsii.Bool(true),
+			AccessLogDestination: awsapigateway.NewLogGroupLogDestination(apiLogGroup),
+			AccessLogFormat:      awsapigateway.AccessLogFormat_JsonWithStandardFields(nil),
+			TracingEnabled:       jsii.Bool(true),
+		},
 	})
 
 	// IAM role to grant the API Gateway permission to send messages to the SQS queue
@@ -90,7 +106,7 @@ func NewInfraStack(scope constructs.Construct, id string, props *InfraStackProps
 			},
 			// Takes the body of the POST request from jenkins and makes it the body of the SQS message
 			RequestTemplates: &map[string]*string{
-				"application/json": jsii.String(SqsSendMessageRequestTemplate),
+				"application/json": jsii.String("Action=SendMessage&MessageBody=$util.urlEncode($input.body)"),
 			},
 			IntegrationResponses: &[]*awsapigateway.IntegrationResponse{
 				{
