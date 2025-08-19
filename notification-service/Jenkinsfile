@@ -34,7 +34,7 @@ pipeline {
     post {
         always {
             echo 'Sending Slack notification'
-            sh "curl --header 'Content-Type: application/json' --request POST --data '{\"buildUrl\":\"${env.BUILD_URL}\", \"buildResult\":\"${currentBuild.result}\", \"buildNumber\":${env.BUILD_NUMBER}, \"jobName\":\"${env.JOB_NAME}\"}' https://oyhgk3usy6.execute-api.us-west-2.amazonaws.com/prod/send-message"
+            sh "curl --header 'Content-Type: application/json' --request POST --data '{\"buildUrl\":\"${env.BUILD_URL}\", \"buildResult\":\"${currentBuild.result}\", \"buildNumber\":${env.BUILD_NUMBER}, \"jobName\":\"${env.JOB_NAME}\"}' https://k3xdq68f02.execute-api.us-west-2.amazonaws.com/prod/send-message"
         }
     }
 }
