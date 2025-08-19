@@ -1,6 +1,6 @@
 # Slacked
 
-This project uses AWS CDK (Go) to provision infrastructure for an AWS Lambda service that processes Jenkins build events and sends formatted notifications to Slack. It integrates API Gateway for webhook handling, AWS Secrets Manager for secure credential storage, and provides an automated Jenkins pipeline for deployment and updates.
+This project provisions a serverless notification service using AWS CDK (Go). It processes Jenkins build events, queues them through AWS SQS, and delivers formatted notifications to Slack via an AWS Lambda function. The system ensures reliable delivery with a Dead-Letter Queue (DLQ) and integrates securely with AWS Secrets Manager for credential management.
 
 ## Project Structure
 
@@ -17,11 +17,12 @@ dipenkumarr-slacked/
 
 ## Features
 
--   AWS CDK (Go) infrastructure as code
--   Go-based AWS Lambda function
--   Secure Slack credentials retrieval via AWS Secrets Manager
--   API Gateway endpoint for Jenkins webhook
--   Jenkinsfile to automate build, test, deploy, and Slack notification
+-   Infrastructure as Code with **AWS CDK**
+-   **AWS API Gateway** endpoint for Jenkins webhooks
+-   **AWS SQS** queue with **DLQ** for reliable message delivery
+-   **Go-based AWS Lambda** for Slack notifications
+-   Secure credential retrieval from **AWS Secrets Manager**
+-   **Jenkinsfile** for automated build, test, deploy, and notification
 
 ## Setup AWS Secrets Manager
 
